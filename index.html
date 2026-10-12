@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#091421">
+  <title>Live Bus Departures</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #091421;
+      --panel: #112237;
+      --panel-light: #172b43;
+      --line: #284056;
+      --text: #f3f8fc;
+      --muted: #a3b7ca;
+      --accent: #66dbc7;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--text);
+      background: radial-gradient(circle at 50% -30%, #183c55 0, transparent 50%), var(--bg);
+    }
+    .app { max-width: 1050px; margin: 0 auto; padding: clamp(20px, 5vw, 54px); }
+    .topbar, .heading, .board-heading, .departure, .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .topbar { margin-bottom: clamp(32px, 6vw, 64px); }
+    .brand { font-size: .82rem; font-weight: 750; letter-spacing: .18em; color: var(--accent); }
+    .top-actions { display: flex; align-items: center; gap: 12px; }
+    .status {
+      display: inline-flex; align-items: center; gap: 9px;
+      padding: 9px 13px; border: 1px solid var(--line); border-radius: 999px;
+      color: var(--muted); font-size: .83rem; font-weight: 700; white-space: nowrap;
+    }
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #e2af56; }
+    .status.live .status-dot { background: var(--accent); box-shadow: 0 0 0 4px #66dbc71f; }
+    .status.error .status-dot { background: #ff927d; }
+    .fullscreen {
+      color: var(--muted); background: transparent; border: 1px solid var(--line);
+      border-radius: 10px; font: inherit; padding: 9px 12px; cursor: pointer;
+    }
+    .fullscreen:hover, .fullscreen:focus-visible { color: var(--text); border-color: var(--muted); }
+    .eyebrow { font-size: .9rem; font-weight: 700; letter-spacing: .12em; color: var(--accent); text-transform: uppercase; }
+    h1 { font-size: clamp(2.2rem, 5.4vw, 4.65rem); line-height: 1.07; letter-spacing: -.055em; margin: 13px 0 14px; }
+    .subheading { color: var(--muted); margin: 0; font-size: 1.05rem; }
+    .clock { text-align: right; flex: 0 0 auto; }
+    .clock-time { font-size: clamp(1.8rem, 4vw, 3rem); font-weight: 750; letter-spacing: -.045em; }
+    .clock-date { font-size: .92rem; color: var(--muted); margin-top: 4px; }
+    .heading { align-items: end; margin-bottom: 42px; }
+    .board { border: 1px solid var(--line); border-radius: 20px; background: var(--panel); overflow: hidden; box-shadow: 0 28px 60px #0000002b; }
+    .board-heading {
+      padding: 19px 28px; background: var(--panel-light); border-bottom: 1px solid var(--line);
+      text-transform: uppercase; font-size: .76rem; font-weight: 750; letter-spacing: .14em; color: var(--muted);
+    }
+    .board-heading .arrives { margin-left: auto; text-align: right; }
+    .board-heading .route-title { width: 126px; flex: 0 0 126px; }
+    .board-heading .destination-title { flex: 1; }
+    .departures { min-height: 90px; }
+    .departure { padding: 21px 28px; border-top: 1px solid var(--line); min-height: 107px; }
+    .departure:first-child { border-top: 0; }
+    .route-cell { width: 126px; flex: 0 0 126px; }
+    .route-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 84px; max-width: 113px; padding: 11px 13px; border-radius: 10px;
+      font-size: clamp(1.13rem, 2.6vw, 1.48rem); font-weight: 850; line-height: 1;
+      overflow-wrap: anywhere;
+    }
+    .destination { flex: 1; min-width: 0; font-size: clamp(1.05rem, 2.4vw, 1.52rem); font-weight: 650; line-height: 1.35; }
+    .eta { text-align: right; min-width: 105px; white-space: nowrap; }
+    .eta .value { font-size: clamp(1.85rem, 4vw, 2.65rem); line-height: 1; font-weight: 820; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
+    .eta .unit { margin-left: 6px; color: var(--muted); font-size: .92rem; font-weight: 650; }
+    .eta.due .value { color: var(--accent); font-size: clamp(1.5rem, 3vw, 2.05rem); letter-spacing: -.025em; }
+    .empty { padding: 48px 28px; color: var(--muted); text-align: center; font-size: 1.05rem; }
+    .notice { padding: 13px 17px; border-radius: 10px; margin-bottom: 18px; background: #56392d; border: 1px solid #a47453; color: #ffe2cf; }
+    .notice[hidden] { display: none; }
+    .footer { color: var(--muted); font-size: .86rem; margin-top: 20px; align-items: start; }
+    .footer p { margin: 0; line-height: 1.5; }
+    .footer p:last-child { text-align: right; }
+    @media (max-width: 600px) {
+      .app { padding: 20px 15px 32px; }
+      .topbar { margin-bottom: 34px; }
+      .heading { align-items: start; gap: 20px; margin-bottom: 28px; }
+      .clock { display: none; }
+      .board-heading { padding: 15px; }
+      .board-heading .route-title { width: 85px; flex-basis: 85px; }
+      .departure { padding: 18px 15px; gap: 10px; min-height: 90px; }
+      .route-cell { width: 85px; flex-basis: 85px; }
+      .route-badge { min-width: 70px; max-width: 82px; padding: 10px 8px; }
+      .eta { min-width: 75px; }
+      .eta .unit { margin-left: 3px; font-size: .75rem; }
+      .footer { display: block; }
+      .footer p:last-child { text-align: left; margin-top: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar">
+      <div class="brand">BUS / LIVE</div>
+      <div class="top-actions">
+        <div class="status" id="status" role="status" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="statusText">CONNECTING</span>
+        </div>
+        <button class="fullscreen" id="fullscreenButton" type="button">Full screen</button>
+      </div>
+    </div>
+
+    <header class="heading">
+      <div>
+        <div class="eyebrow">Upcoming departures</div>
+        <h1 id="stopName">Broadway &amp; Hawthorne Ave</h1>
+        <p class="subheading">Stop <span id="stopId">12539</span> · Real-time bus arrivals</p>
+      </div>
+      <div class="clock" aria-hidden="true">
+        <div class="clock-time" id="clockTime">--:--</div>
+        <div class="clock-date" id="clockDate"></div>
+      </div>
+    </header>
+
+    <div class="notice" id="notice" role="alert" hidden></div>
+
+    <section class="board" aria-label="Upcoming bus departures">
+      <div class="board-heading">
+        <span class="route-title">Route</span>
+        <span class="destination-title">Destination</span>
+        <span class="arrives">Arrives in</span>
+      </div>
+      <div class="departures" id="departures">
+        <div class="empty">Loading departures…</div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>Updates automatically every 15 seconds.</p>
+      <p id="lastUpdated">Waiting for first update…</p>
+    </footer>
+  </main>
+
+  <script>
+    "use strict";
+
+    // All app configuration and API logic lives in this HTML file.
+    // The Python development server only serves static files.
+    const STOP_ID = "12509";
+    const API_URL = `http://10.15.231.250:8080/predictions/${STOP_ID}`;
+
+    const POLL_INTERVAL_MS = 15000;
+    const REQUEST_TIMEOUT_MS = 8000;
+    const departuresEl = document.getElementById("departures");
+    const statusEl = document.getElementById("status");
+    const statusTextEl = document.getElementById("statusText");
+    const noticeEl = document.getElementById("notice");
+    const lastUpdatedEl = document.getElementById("lastUpdated");
+    let lastSuccessAt = null;
+    let loading = false;
+
+    function safeHexColor(value, fallback) {
+      return typeof value === "string" && /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(value)
+        ? value : fallback;
+    }
+
+    function setStatus(label, type) {
+      statusEl.className = `status ${type || ""}`;
+      statusTextEl.textContent = label;
+    }
+
+    function showNotice(message) {
+      noticeEl.textContent = message;
+      noticeEl.hidden = !message;
+    }
+
+    function makeDeparture(prediction) {
+      const row = document.createElement("div");
+      row.className = "departure";
+
+      const routeCell = document.createElement("div");
+      routeCell.className = "route-cell";
+      const badge = document.createElement("span");
+      badge.className = "route-badge";
+      badge.textContent = prediction.route || "—";
+      badge.style.backgroundColor = safeHexColor(prediction.color, "#0076CE");
+      badge.style.color = safeHexColor(prediction.text_color, "#FFFFFF");
+      routeCell.appendChild(badge);
+
+      const destination = document.createElement("div");
+      destination.className = "destination";
+      destination.textContent = prediction.headsign || "Destination unavailable";
+
+      const eta = document.createElement("div");
+      eta.className = "eta";
+      const rawMinutes = Number(prediction.minutes);
+      const minutes = Number.isFinite(rawMinutes) ? Math.max(0, Math.round(rawMinutes)) : null;
+      const value = document.createElement("span");
+      value.className = "value";
+
+      if (minutes === 0) {
+        eta.classList.add("due");
+        value.textContent = "Due";
+      } else if (minutes !== null) {
+        value.textContent = String(minutes);
+        const unit = document.createElement("span");
+        unit.className = "unit";
+        unit.textContent = "min";
+        eta.append(value, unit);
+      } else {
+        value.textContent = "—";
+      }
+      if (!eta.contains(value)) eta.appendChild(value);
+
+      row.append(routeCell, destination, eta);
+      return row;
+    }
+
+    function renderPredictions(payload) {
+      if (!Array.isArray(payload.predictions)) {
+        throw new Error("API response is missing its predictions array");
+      }
+
+      if (typeof payload.stop_name === "string" && payload.stop_name) {
+        document.getElementById("stopName").textContent = payload.stop_name;
+        document.title = `${payload.stop_name} · Live Departures`;
+      }
+      if (payload.stop_id !== undefined) {
+        document.getElementById("stopId").textContent = String(payload.stop_id);
+      }
+
+      const rows = payload.predictions.map(makeDeparture);
+      departuresEl.replaceChildren(...rows);
+      if (rows.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "No upcoming departures are currently listed.";
+        departuresEl.appendChild(empty);
+      }
+    }
+
+    async function loadPredictions() {
+      if (loading) return;
+      loading = true;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+      try {
+        const response = await fetch(API_URL, { cache: "no-store", signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        renderPredictions(data);
+        lastSuccessAt = Date.now();
+        showNotice("");
+        setStatus("LIVE", "live");
+        updateLastUpdated();
+      } catch (error) {
+        setStatus("RETRYING", "error");
+        showNotice(
+          `Could not update bus arrivals (${error.message}). Retrying automatically. ` +
+          `Check that this device can reach the API and that the API allows ` +
+          `cross-origin browser requests (CORS).`
+        );
+        if (lastSuccessAt === null) {
+          departuresEl.replaceChildren();
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "Live departures are temporarily unavailable.";
+          departuresEl.appendChild(empty);
+        }
+      } finally {
+        clearTimeout(timeout);
+        loading = false;
+      }
+    }
+
+    function updateLastUpdated() {
+      if (lastSuccessAt === null) return;
+      const secondsAgo = Math.floor((Date.now() - lastSuccessAt) / 1000);
+      if (secondsAgo < 5) lastUpdatedEl.textContent = "Updated just now";
+      else if (secondsAgo < 60) lastUpdatedEl.textContent = `Last updated ${secondsAgo}s ago`;
+      else lastUpdatedEl.textContent = `Last updated ${Math.floor(secondsAgo / 60)}m ago`;
+    }
+
+    function updateClock() {
+      const now = new Date();
+      document.getElementById("clockTime").textContent = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      document.getElementById("clockDate").textContent = now.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+      updateLastUpdated();
+    }
+
+    const fullscreenButton = document.getElementById("fullscreenButton");
+    if (!document.documentElement.requestFullscreen) fullscreenButton.hidden = true;
+    fullscreenButton.addEventListener("click", async () => {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen();
+      } catch (error) {
+        // Fullscreen may be disabled by browser or device settings.
+      }
+    });
+    document.addEventListener("fullscreenchange", () => {
+      fullscreenButton.textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) loadPredictions();
+    });
+
+    updateClock();
+    loadPredictions();
+    setInterval(loadPredictions, POLL_INTERVAL_MS);
+    setInterval(updateClock, 1000);
+  </script>
+</body>
+</html>
